@@ -1,1 +1,212 @@
-# web-rtc-app
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Compartir Dispositivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variables globales para Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let userId;
+
+        // Inicializar Firebase y autenticar
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-container').classList.remove('hidden');
+                updateUIForUser();
+            }
+        });
+
+        async function initAuth() {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Error signing in:", error);
+                document.getElementById('loading').textContent = 'Error de autenticación. Por favor, recargue la página.';
+            }
+        }
+
+        function updateUIForUser() {
+            // Se muestra el ID de usuario para demostración
+            document.getElementById('userIdDisplay').textContent = `Tu ID de Usuario: ${userId}`;
+        }
+
+        const roomCodeInput = document.getElementById('roomCodeInput');
+        const publishSection = document.getElementById('publishSection');
+        const viewSection = document.getElementById('viewSection');
+        const deviceDataSection = document.getElementById('deviceDataSection');
+        const publishButton = document.getElementById('publishButton');
+        const connectButton = document.getElementById('connectButton');
+        const goBackButton = document.getElementById('goBackButton');
+
+        // Función para publicar datos del dispositivo
+        publishButton.addEventListener('click', async () => {
+            const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const deviceData = {
+                model: 'Simulador de Teléfono',
+                os: 'Android 14',
+                battery: `${Math.floor(Math.random() * 50) + 50}%`,
+                location: 'Nueva York, EE. UU.',
+                apps: 'Instagram, WhatsApp, Spotify'
+            };
+
+            const roomDocRef = doc(db, `artifacts/${appId}/public/data/device_data/${roomCode}`);
+            try {
+                await setDoc(roomDocRef, deviceData);
+                document.getElementById('generatedRoomCode').textContent = roomCode;
+                document.getElementById('publishSection').classList.add('hidden');
+                document.getElementById('linkGenerated').classList.remove('hidden');
+
+                // Mantener la conexión activa para mostrar datos en tiempo real
+                onSnapshot(roomDocRef, (doc) => {
+                    if (doc.exists()) {
+                        const data = doc.data();
+                        document.getElementById('currentBattery').textContent = `Batería: ${data.battery}`;
+                        document.getElementById('currentLocation').textContent = `Ubicación: ${data.location}`;
+                        document.getElementById('currentApps').textContent = `Apps: ${data.apps}`;
+                    }
+                });
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
+        });
+
+        // Función para conectar y ver datos
+        connectButton.addEventListener('click', () => {
+            const roomCode = roomCodeInput.value.toUpperCase();
+            if (roomCode) {
+                const roomDocRef = doc(db, `artifacts/${appId}/public/data/device_data/${roomCode}`);
+                onSnapshot(roomDocRef, (doc) => {
+                    if (doc.exists()) {
+                        const data = doc.data();
+                        document.getElementById('inspectedModel').textContent = `Modelo: ${data.model}`;
+                        document.getElementById('inspectedOS').textContent = `SO: ${data.os}`;
+                        document.getElementById('inspectedBattery').textContent = `Batería: ${data.battery}`;
+                        document.getElementById('inspectedLocation').textContent = `Ubicación: ${data.location}`;
+                        document.getElementById('inspectedApps').textContent = `Apps: ${data.apps}`;
+
+                        viewSection.classList.add('hidden');
+                        deviceDataSection.classList.remove('hidden');
+                    } else {
+                        document.getElementById('connectMessage').textContent = 'Código de sala no válido.';
+                    }
+                });
+            } else {
+                document.getElementById('connectMessage').textContent = 'Por favor, ingrese un código.';
+            }
+        });
+
+        goBackButton.addEventListener('click', () => {
+            deviceDataSection.classList.add('hidden');
+            viewSection.classList.remove('hidden');
+            document.getElementById('connectMessage').textContent = '';
+        });
+
+        initAuth();
+
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 95%;
+            width: 600px;
+        }
+        .card {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        input, button {
+            border-radius: 0.5rem;
+        }
+        .text-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div id="loading" class="text-center font-semibold text-lg">Cargando la aplicación...</div>
+    <div id="main-container" class="container mx-auto hidden">
+        <h1 class="text-4xl font-bold text-center mb-8">Compartir Datos del Dispositivo</h1>
+        <p id="userIdDisplay" class="text-center text-sm text-gray-500 mb-6"></p>
+
+        <!-- Seccion para Publicar -->
+        <div id="publishSection" class="card mb-6 text-center">
+            <h2 class="text-2xl font-bold mb-4">Compartir tu información</h2>
+            <p class="text-sm text-gray-600 mb-4">Al hacer clic en el botón, se generará un código único para que alguien más pueda ver una simulación de los datos de tu dispositivo. Esto es solo con tu consentimiento explícito.</p>
+            <button id="publishButton" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md">
+                Publicar Información del Dispositivo
+            </button>
+        </div>
+        
+        <!-- Link Generado -->
+        <div id="linkGenerated" class="card mb-6 text-center hidden">
+            <h2 class="text-2xl font-bold text-green-600 mb-4">¡Código Generado!</h2>
+            <p class="text-sm text-gray-600 mb-4">Comparte este código para que alguien pueda ver tus datos en tiempo real:</p>
+            <p id="generatedRoomCode" class="text-4xl font-mono tracking-widest bg-gray-100 rounded-lg p-4 inline-block select-all cursor-pointer hover:bg-gray-200 transition duration-300"></p>
+            <p id="currentBattery" class="mt-4 text-sm font-semibold text-gray-700"></p>
+            <p id="currentLocation" class="mt-2 text-sm font-semibold text-gray-700"></p>
+            <p id="currentApps" class="mt-2 text-sm font-semibold text-gray-700"></p>
+        </div>
+
+        <!-- Sección para Ver -->
+        <div id="viewSection" class="card mb-6 text-center">
+            <h2 class="text-2xl font-bold mb-4">Ver información de otro dispositivo</h2>
+            <p class="text-sm text-gray-600 mb-4">Ingresa el código que te han compartido para ver los datos del dispositivo en tiempo real.</p>
+            <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <input type="text" id="roomCodeInput" class="text-input text-center uppercase" placeholder="Código de sala (ej: ABCD12)">
+                <button id="connectButton" class="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md">
+                    Conectar
+                </button>
+            </div>
+            <p id="connectMessage" class="text-red-500 text-sm mt-2"></p>
+        </div>
+        
+        <!-- Datos del Dispositivo a Inspeccionar -->
+        <div id="deviceDataSection" class="card hidden">
+            <h2 class="text-2xl font-bold text-center mb-4">Datos del Dispositivo</h2>
+            <div class="space-y-4">
+                <p class="text-lg font-medium text-gray-800" id="inspectedModel"></p>
+                <p class="text-lg font-medium text-gray-800" id="inspectedOS"></p>
+                <p class="text-lg font-medium text-gray-800" id="inspectedBattery"></p>
+                <p class="text-lg font-medium text-gray-800" id="inspectedLocation"></p>
+                <p class="text-lg font-medium text-gray-800" id="inspectedApps"></p>
+            </div>
+            <button id="goBackButton" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 mt-6 rounded-lg transition duration-300 shadow-md">
+                Volver
+            </button>
+        </div>
+    </div>
+</body>
+</html>
